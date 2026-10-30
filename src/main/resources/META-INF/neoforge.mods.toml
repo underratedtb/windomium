@@ -1,0 +1,40 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="GNU Lesser General Public License v3.0 (LGPL-3.0)"
+issueTrackerURL="https://github.com/windomium/windomium/issues"
+
+[[mods]]
+modId="windomium"
+version="0.1.0-alpha+1.21.1"
+displayName="Windomium"
+displayURL="https://github.com/windomium/windomium"
+authors="underratedtb"
+description='''
+Windomium is a modular, open-source optimisation engine and performance framework for Minecraft (NeoForge 1.21.1).
+
+Key Features:
+- Ray-Marched Occlusion & Frustum Culling (Selectable in real time)
+- Asynchronous Multi-Threaded Chunk Meshing Pool
+- Entity Shadow, Equipment Layer & NameTag Distance Culling
+- Block Entity Frame-Budget Rate Limiter
+- Fastutil Thread-Local Biome Colour Caching & Object Pooling
+- Adaptive Runtime Governor (1% & 0.1% Low FPS Stabiliser)
+- Built-in Compatibility Profiles for Create, Mekanism, AE2, Botania & Sodium/Iris
+'''
+
+[[mixins]]
+config="windomium.mixins.json"
+
+[[dependencies.windomium]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.windomium]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"

@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.windomium.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "LevelMixin"
+  ],
+  "client": [
+    "BlockEntityRenderDispatcherMixin",
+    "ClientLevelMixin",
+    "EntityRenderDispatcherMixin",
+    "EntityRendererMixin",
+    "FrustumMixin",
+    "HumanoidArmorLayerMixin",
+    "ItemInHandLayerMixin",
+    "ParticleEngineMixin"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

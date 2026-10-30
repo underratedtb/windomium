@@ -1,0 +1,67 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.74'
+}
+
+version = '0.1.0-alpha'
+group = 'org.windomium'
+
+base {
+    archivesName = 'windomium'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = "21.1.77"
+
+    parchment {
+        mappingsVersion = "2024.11.17"
+        minecraftVersion = "1.21.1"
+    }
+
+    runs {
+        client {
+            client()
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        windomium {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+dependencies {
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+            minecraft_version      : "1.21.1",
+            minecraft_version_range: "[1.21.1,1.22)",
+            neo_version            : "21.1.77",
+            neo_version_range      : "[21.1.0,)",
+            loader_version_range   : "[4,)",
+            mod_id                 : "windomium",
+            mod_name               : "Windomium",
+            mod_license            : "LGPL-3.0",
+            mod_version            : "0.1.0-alpha",
+            mod_authors            : "Windomium Team",
+            mod_description        : "An open-source, modular optimisation engine and framework for Minecraft."
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml', 'windomium.mixins.json']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
