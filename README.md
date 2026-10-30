@@ -1,4 +1,4 @@
-<img width="1920" height="1920" alt="Başlıksız" src="https://github.com/user-attachments/assets/8e0a2206-7e74-49ad-9081-442764ca9734" />
+<img width="200" height="200" alt="Başlıksız" src="https://github.com/user-attachments/assets/8e0a2206-7e74-49ad-9081-442764ca9734" />
 
 # Windomium Optimisation Engine
 
