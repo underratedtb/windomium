@@ -1,3 +1,5 @@
+<img width="1920" height="1920" alt="Başlıksız" src="https://github.com/user-attachments/assets/8e0a2206-7e74-49ad-9081-442764ca9734" />
+
 # Windomium Optimisation Engine
 
 **Windomium** is an open-source, modular optimisation engine and performance framework built for **Minecraft 1.21.1 (NeoForge)** on **Java 21**. Designed with a strict *"measure first, optimise later"* philosophy, Windomium targets both average framerate and **1% / 0.1% low frame time stability** whilst preserving complete visual parity and modpack compatibility.
