@@ -1,5 +1,6 @@
 package org.windomium.core.memory;
 
+import org.windomium.client.culling.OcclusionCuller;
 import org.windomium.core.config.WindomiumConfig;
 import org.windomium.core.module.ModuleManager;
 
@@ -45,15 +46,14 @@ public final class MemoryOptimiserController {
         if (moduleActive && maxHeapMb > 0L) {
             double usageRatio = (double) usedHeapMb / maxHeapMb;
             if (usageRatio > 0.88) {
-                BiomeColourCache.invalidateCurrentThread();
+                OcclusionCuller.clearCache();
                 ObjectPoolManager.clearCurrentThreadPools();
             }
         }
     }
 
     public static void trimCaches() {
-        BiomeColourCache.invalidateCurrentThread();
-        BiomeColourCache.resetStats();
+        OcclusionCuller.clearCache();
         ObjectPoolManager.clearCurrentThreadPools();
     }
 

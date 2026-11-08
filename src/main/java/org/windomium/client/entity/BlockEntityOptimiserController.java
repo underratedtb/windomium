@@ -1,8 +1,12 @@
 package org.windomium.client.entity;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.entity.BeaconBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.windomium.api.RenderBehaviour;
@@ -23,8 +27,9 @@ public final class BlockEntityOptimiserController {
     private static double cameraZ;
     private static double maxDistanceSq = 84.0 * 84.0;
     private static double throttleStartDistSq = 36.0 * 36.0;
-    private static long frameBudgetNs = 1_800_000L;
+    private static long frameBudgetNs = 1_500_000L;
     private static long accumulatedTimeNs = 0L;
+    private static long currentRenderStartNs = 0L;
     private static long frameCounter = 0L;
 
     private BlockEntityOptimiserController() {
@@ -32,6 +37,7 @@ public final class BlockEntityOptimiserController {
 
     public static void onFrameBegin() {
         accumulatedTimeNs = 0L;
+        currentRenderStartNs = 0L;
         frameCounter++;
 
         Minecraft mc = Minecraft.getInstance();
@@ -69,10 +75,10 @@ public final class BlockEntityOptimiserController {
             case CUSTOM -> 32.0;
         };
 
-        int budgetMicros = WindomiumConfig.CLIENT_SPEC.isLoaded()
-                ? WindomiumConfig.BLOCK_ENTITY_FRAME_BUDGET_MICROS.get()
-                : 1500;
-        frameBudgetNs = budgetMicros * 1_000L;
+        double budgetMs = WindomiumConfig.CLIENT_SPEC.isLoaded()
+                ? WindomiumConfig.BLOCK_ENTITY_FRAME_BUDGET_MS.get()
+                : 1.5;
+        frameBudgetNs = (long) (budgetMs * 1_000_000.0);
 
         double scaledMax = baseMaxDist * scale;
         double scaledThrottle = baseThrottleDist * scale;
@@ -82,7 +88,21 @@ public final class BlockEntityOptimiserController {
     }
 
     public static boolean shouldSkipBlockEntity(BlockEntity blockEntity) {
-        if (!active || blockEntity == null) {
+        if (blockEntity == null || !RenderSystem.isOnRenderThread()) {
+            return false;
+        }
+
+        if (blockEntity instanceof BeaconBlockEntity) {
+            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+            return false;
+        }
+
+        if (CullingController.shouldCullBlockEntity(blockEntity)) {
+            ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
+            return true;
+        }
+
+        if (!active) {
             ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
             return false;
         }
@@ -92,8 +112,11 @@ public final class BlockEntityOptimiserController {
             return false;
         }
 
-        String typeId = blockEntity.getType().toString();
-        RenderBehaviour behaviour = WindomiumAPI.getBlockEntityBehaviour(typeId).orElse(RenderBehaviour.CULLABLE);
+        ResourceLocation key = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType());
+        RenderBehaviour behaviour = key != null
+                ? WindomiumAPI.getBlockEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE)
+                : RenderBehaviour.CULLABLE;
+
         if (behaviour == RenderBehaviour.DO_NOT_TOUCH) {
             ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
             return false;
@@ -128,9 +151,19 @@ public final class BlockEntityOptimiserController {
     }
 
     public static void beginRenderSample() {
+        if (active) {
+            currentRenderStartNs = System.nanoTime();
+        }
     }
 
     public static void endRenderSample() {
+        if (active && currentRenderStartNs != 0L) {
+            long elapsed = System.nanoTime() - currentRenderStartNs;
+            if (elapsed > 0L) {
+                accumulatedTimeNs += elapsed;
+            }
+            currentRenderStartNs = 0L;
+        }
     }
 
     public static void recordRenderDuration(long durationNs) {

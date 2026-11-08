@@ -5,7 +5,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import org.windomium.client.culling.CullingController;
 import org.windomium.core.config.WindomiumConfig;
-import org.windomium.core.memory.BiomeColourCache;
 import org.windomium.core.memory.MemoryOptimiserController;
 import org.windomium.core.module.ModuleManager;
 import org.windomium.core.profiler.FrameMetricsSnapshot;
@@ -57,9 +56,8 @@ public final class ProfilerOverlay {
                     snapshot.frameTimeVarianceMs()
             );
             cachedLine3 = String.format(
-                    "Timings -> CPU: %.2f ms | Mesh: %.2f ms | Culling: %.2f ms",
+                    "Timings -> CPU: %.2f ms | Culling: %.2f ms",
                     timings.getCpuFrameTimeMs(),
-                    timings.getChunkMeshTimeMs(),
                     timings.getCullingTimeMs()
             );
             cachedLine4 = String.format(
@@ -76,11 +74,10 @@ public final class ProfilerOverlay {
                     timings.getSkippedEntityLayers()
             );
             cachedLine6 = String.format(
-                    "RAM: %d / %d MB | Alloc: %.1f MB/s | Biome Cache Hit: %.1f%%",
+                    "RAM: %d / %d MB | Alloc: %.1f MB/s",
                     MemoryOptimiserController.getUsedHeapMb(),
                     MemoryOptimiserController.getMaxHeapMb(),
-                    MemoryOptimiserController.getAllocationRateMbPerSec(),
-                    BiomeColourCache.getHitRatioPercentage()
+                    MemoryOptimiserController.getAllocationRateMbPerSec()
             );
         }
 

@@ -3,23 +3,21 @@ package org.windomium.client.module;
 import org.windomium.api.IOptimisationModule;
 import org.windomium.api.OptimisationCategory;
 import org.windomium.api.RiskLevel;
-import org.windomium.client.render.MesherThreadPool;
-import org.windomium.core.config.WindomiumConfig;
 
-public final class ChunkMesherModule implements IOptimisationModule {
+public final class EntityOptimisationModule implements IOptimisationModule {
     @Override
     public String getId() {
-        return "chunk_mesher";
+        return "entity_optimiser";
     }
 
     @Override
     public String getDisplayName() {
-        return "Async Chunk Mesher";
+        return "Entity Layer & Shadow Optimiser";
     }
 
     @Override
     public OptimisationCategory getCategory() {
-        return OptimisationCategory.CHUNK_RENDERING;
+        return OptimisationCategory.ENTITY;
     }
 
     @Override
@@ -43,14 +41,9 @@ public final class ChunkMesherModule implements IOptimisationModule {
 
     @Override
     public void onEnable() {
-        int threads = WindomiumConfig.CLIENT_SPEC.isLoaded()
-                ? WindomiumConfig.MESHER_THREAD_COUNT.get()
-                : Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
-        MesherThreadPool.ensureActive(threads);
     }
 
     @Override
     public void onDisable() {
-        MesherThreadPool.clearQueue();
     }
 }

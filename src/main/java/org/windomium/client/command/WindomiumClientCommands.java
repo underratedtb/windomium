@@ -15,7 +15,6 @@ import org.windomium.core.compat.CompatibilityDetector;
 import org.windomium.core.compat.ModCompatibilityManager;
 import org.windomium.core.config.CullingMode;
 import org.windomium.core.config.WindomiumConfig;
-import org.windomium.core.memory.BiomeColourCache;
 import org.windomium.core.memory.JvmGcAdvisor;
 import org.windomium.core.memory.MemoryOptimiserController;
 import org.windomium.core.module.ModuleContainer;
@@ -123,15 +122,14 @@ public final class WindomiumClientCommands {
                         .then(Commands.literal("memory")
                                 .executes(context -> {
                                     String stats = String.format(
-                                            "[Windomium Memory] Heap: %d / %d MB | Alloc Rate: %.1f MB/s | Biome Cache Hit Ratio: %.1f%%",
+                                            "[Windomium Memory] Heap: %d / %d MB | Alloc Rate: %.1f MB/s",
                                             MemoryOptimiserController.getUsedHeapMb(),
                                             MemoryOptimiserController.getMaxHeapMb(),
-                                            MemoryOptimiserController.getAllocationRateMbPerSec(),
-                                            BiomeColourCache.getHitRatioPercentage()
+                                            MemoryOptimiserController.getAllocationRateMbPerSec()
                                     );
                                     MemoryOptimiserController.trimCaches();
                                     context.getSource().sendSuccess(() -> Component.literal(stats), false);
-                                    context.getSource().sendSuccess(() -> Component.literal("[Windomium Memory] Thread-local pools and biome caches trimmed."), false);
+                                    context.getSource().sendSuccess(() -> Component.literal("[Windomium Memory] Caches and object pools trimmed."), false);
                                     return 1;
                                 })
                         )

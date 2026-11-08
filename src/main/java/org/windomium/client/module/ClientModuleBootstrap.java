@@ -4,6 +4,8 @@ import org.windomium.api.IOptimisationModule;
 import org.windomium.api.OptimisationCategory;
 import org.windomium.api.RiskLevel;
 import org.windomium.api.WindomiumAPI;
+import org.windomium.client.culling.OcclusionCuller;
+import org.windomium.core.memory.MemoryOptimiserController;
 
 public final class ClientModuleBootstrap {
     private static boolean registered = false;
@@ -16,29 +18,34 @@ public final class ClientModuleBootstrap {
             return;
         }
         registered = true;
-        WindomiumAPI.registerModule(new ChunkMesherModule());
-        WindomiumAPI.registerModule(new FrustumCullingModule());
-        WindomiumAPI.registerModule(new OcclusionCullingModule());
-        WindomiumAPI.registerModule(new BuiltInEntityModule());
-        WindomiumAPI.registerModule(new BuiltInBlockEntityModule());
-        WindomiumAPI.registerModule(new ParticleOptimisationModule());
-        WindomiumAPI.registerModule(new MemoryOptimisationModule());
+        WindomiumAPI.registerModule(new SimpleClientModule("frustum_culling", "Section & Entity Frustum Culling", OptimisationCategory.CHUNK_RENDERING, () -> {}, () -> {}));
+        WindomiumAPI.registerModule(new SimpleClientModule("occlusion_culling", "Ray-Marched Occlusion Culling", OptimisationCategory.CHUNK_RENDERING, OcclusionCuller::clearCache, OcclusionCuller::clearCache));
+        WindomiumAPI.registerModule(new SimpleClientModule("entity_optimiser", "Entity Layer & Shadow Optimiser", OptimisationCategory.ENTITY, () -> {}, () -> {}));
+        WindomiumAPI.registerModule(new SimpleClientModule("block_entity_optimiser", "Block Entity Culling & Rate Limiter", OptimisationCategory.BLOCK_ENTITY, () -> {}, () -> {}));
+        WindomiumAPI.registerModule(new SimpleClientModule("particle_optimiser", "Particle Distance & Budget Limiter", OptimisationCategory.PARTICLE_AND_UI, () -> {}, () -> {}));
+        WindomiumAPI.registerModule(new SimpleClientModule("memory_optimiser", "Fastutil Cache & Memory Optimiser", OptimisationCategory.MEMORY_AND_LOADING, () -> {}, MemoryOptimiserController::trimCaches));
     }
 
-    private static final class BuiltInEntityModule implements IOptimisationModule {
+    private record SimpleClientModule(
+            String id,
+            String displayName,
+            OptimisationCategory category,
+            Runnable enableAction,
+            Runnable disableAction
+    ) implements IOptimisationModule {
         @Override
         public String getId() {
-            return "entity_optimiser";
+            return this.id;
         }
 
         @Override
         public String getDisplayName() {
-            return "Entity Layer & Shadow Optimiser";
+            return this.displayName;
         }
 
         @Override
         public OptimisationCategory getCategory() {
-            return OptimisationCategory.ENTITY;
+            return this.category;
         }
 
         @Override
@@ -62,54 +69,12 @@ public final class ClientModuleBootstrap {
 
         @Override
         public void onEnable() {
+            this.enableAction.run();
         }
 
         @Override
         public void onDisable() {
-        }
-    }
-
-    private static final class BuiltInBlockEntityModule implements IOptimisationModule {
-        @Override
-        public String getId() {
-            return "block_entity_optimiser";
-        }
-
-        @Override
-        public String getDisplayName() {
-            return "Block Entity Culling & Rate Limiter";
-        }
-
-        @Override
-        public OptimisationCategory getCategory() {
-            return OptimisationCategory.BLOCK_ENTITY;
-        }
-
-        @Override
-        public RiskLevel getRiskLevel() {
-            return RiskLevel.SAFE;
-        }
-
-        @Override
-        public boolean guaranteesVisualParity() {
-            return true;
-        }
-
-        @Override
-        public boolean isClientOnly() {
-            return true;
-        }
-
-        @Override
-        public void onInitialise() {
-        }
-
-        @Override
-        public void onEnable() {
-        }
-
-        @Override
-        public void onDisable() {
+            this.disableAction.run();
         }
     }
 }

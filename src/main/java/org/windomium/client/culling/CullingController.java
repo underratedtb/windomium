@@ -1,8 +1,11 @@
 package org.windomium.client.culling;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -33,6 +36,7 @@ public final class CullingController {
     private static long lastGovernorUpdateNs = 0L;
     private static int activeFrameParticles = 0;
     private static int maxParticlesPerFrame = 500;
+    private static int timingSampleCounter = 0;
     private static boolean frustumActive = false;
     private static boolean occlusionActive = false;
     private static CullingMode activeCullingMode = CullingMode.COMBINED;
@@ -75,12 +79,11 @@ public final class CullingController {
             OcclusionCuller.onFrameBegin(cameraX, cameraY, cameraZ);
         }
 
-        updateGovernor();
+        updateGovernor(mc);
 
         int renderChunks = mc.options.getEffectiveRenderDistance();
-        double baseSectionBlocks = (renderChunks * 16.0) + 16.0;
-        double scaledSectionBlocks = baseSectionBlocks * dynamicQualityScale;
-        maxSectionDistanceSq = scaledSectionBlocks * scaledSectionBlocks;
+        double baseSectionBlocks = (renderChunks * 16.0 * 1.42) + 16.0;
+        maxSectionDistanceSq = baseSectionBlocks * baseSectionBlocks;
 
         Preset preset = configLoaded ? WindomiumConfig.ACTIVE_PRESET.get() : Preset.BALANCED;
         double entityBase = switch (preset) {
@@ -117,7 +120,7 @@ public final class CullingController {
         maxParticleDistanceSq = scaledParticle * scaledParticle;
     }
 
-    private static void updateGovernor() {
+    private static void updateGovernor(Minecraft mc) {
         if (!WindomiumConfig.CLIENT_SPEC.isLoaded() || !WindomiumConfig.ENABLE_RUNTIME_GOVERNOR.get()) {
             dynamicQualityScale = 1.0;
             return;
@@ -134,24 +137,29 @@ public final class CullingController {
             return;
         }
 
-        int targetFps = WindomiumConfig.TARGET_FPS.get();
-        int targetOnePercent = WindomiumConfig.TARGET_ONE_PERCENT_LOW.get();
+        int userLimit = mc.options.framerateLimit().get();
+        int effectiveLimit = (userLimit > 0 && userLimit < 260) ? userLimit : 1000;
+        int targetFps = Math.min(WindomiumConfig.TARGET_FPS.get(), effectiveLimit);
+        int targetOnePercent = Math.min(WindomiumConfig.TARGET_ONE_PERCENT_LOW.get(), (int) (targetFps * 0.75));
+
         double currentFps = snapshot.averageFps();
         double currentOnePercent = snapshot.onePercentLowFps();
 
-        if (currentFps < targetFps * 0.90 && currentOnePercent < targetOnePercent * 0.85) {
+        if (currentFps < targetFps * 0.88 || currentOnePercent < targetOnePercent * 0.85) {
             dynamicQualityScale = Math.max(0.65, dynamicQualityScale - 0.04);
-        } else if (currentFps >= targetFps) {
-            dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.05);
+        } else if (currentFps >= targetFps * 0.96) {
+            dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.04);
         }
     }
 
     public static boolean shouldCullBox(AABB box) {
-        if (!frustumActive && !occlusionActive) {
+        if ((!frustumActive && !occlusionActive) || box == null || !RenderSystem.isOnRenderThread()) {
             return false;
         }
 
-        long startNs = System.nanoTime();
+        boolean sampleTime = ((timingSampleCounter++ & 63) == 0);
+        long startNs = sampleTime ? System.nanoTime() : 0L;
+
         try {
             double spanX = box.maxX - box.minX;
             double spanY = box.maxY - box.minY;
@@ -163,7 +171,6 @@ public final class CullingController {
             }
 
             double centreX = box.minX + 8.0;
-            double centreY = box.minY + 8.0;
             double centreZ = box.minZ + 8.0;
 
             double dx = centreX - cameraX;
@@ -181,12 +188,7 @@ public final class CullingController {
             }
 
             if (occlusionActive && !CompatibilityDetector.isIrisOrForkLoaded()) {
-                double dy = cameraY - centreY;
-                if (cameraY > 62.0 && centreY < 40.0 && dy > 28.0 && horizontalDistSq > 4096.0) {
-                    ClientProfilerManager.getSectionTimings().incrementCulledSections(1);
-                    return true;
-                }
-                if (horizontalDistSq > 1024.0 && OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ)) {
+                if (horizontalDistSq > 1024.0 && OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ, true)) {
                     ClientProfilerManager.getSectionTimings().incrementCulledSections(1);
                     return true;
                 }
@@ -195,16 +197,18 @@ public final class CullingController {
             ClientProfilerManager.getSectionTimings().incrementRenderedSections(1);
             return false;
         } finally {
-            ClientProfilerManager.getSectionTimings().setCullingTimeNs(System.nanoTime() - startNs);
+            if (sampleTime) {
+                ClientProfilerManager.getSectionTimings().setCullingTimeNs((System.nanoTime() - startNs) * 64L);
+            }
         }
     }
 
     public static boolean shouldCullEntity(Entity entity, double camX, double camY, double camZ) {
-        if ((!frustumActive && !occlusionActive) || entity == null) {
+        if ((!frustumActive && !occlusionActive) || entity == null || !RenderSystem.isOnRenderThread()) {
             return false;
         }
 
-        if (entity instanceof Player || entity.isSpectator() || entity.isCurrentlyGlowing() || entity.hasCustomName() || entity.isVehicle() || entity.isPassenger()) {
+        if (entity.noCulling || entity instanceof Player || entity.isSpectator() || entity.isCurrentlyGlowing() || entity.hasCustomName() || entity.isVehicle() || entity.isPassenger()) {
             ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
             return false;
         }
@@ -214,8 +218,8 @@ public final class CullingController {
             return false;
         }
 
-        String entityId = entity.getType().toString();
-        if (WindomiumAPI.getEntityBehaviour(entityId).orElse(RenderBehaviour.CULLABLE) == RenderBehaviour.DO_NOT_TOUCH) {
+        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        if (key != null && WindomiumAPI.getEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE) == RenderBehaviour.DO_NOT_TOUCH) {
             ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
             return false;
         }
@@ -226,21 +230,18 @@ public final class CullingController {
             return false;
         }
 
-        if (frustumActive && distSq > maxEntityDistanceSq) {
+        AABB boundingBox = entity.getBoundingBox();
+        double sizeScale = Math.max(1.0, Math.min(4.0, boundingBox.getSize()));
+        double effectiveMaxDistSq = maxEntityDistanceSq * sizeScale * sizeScale;
+
+        if (frustumActive && distSq > effectiveMaxDistSq) {
             ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
             return true;
         }
 
-        if (occlusionActive) {
-            double dy = Math.abs(camY - entity.getY());
-            if (dy > 36.0 && distSq > 2304.0) {
-                ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
-                return true;
-            }
-            if (distSq > 256.0 && OcclusionCuller.isBoxOccluded(entity.getBoundingBox(), camX, camY, camZ)) {
-                ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
-                return true;
-            }
+        if (occlusionActive && distSq > 256.0 && OcclusionCuller.isBoxOccluded(boundingBox, camX, camY, camZ, false)) {
+            ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
+            return true;
         }
 
         ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
@@ -248,7 +249,7 @@ public final class CullingController {
     }
 
     public static boolean shouldCullBlockEntity(BlockEntity blockEntity) {
-        if ((!frustumActive && !occlusionActive) || blockEntity == null) {
+        if ((!frustumActive && !occlusionActive) || blockEntity == null || !RenderSystem.isOnRenderThread()) {
             return false;
         }
 
@@ -270,15 +271,16 @@ public final class CullingController {
             return true;
         }
 
-        if (occlusionActive) {
-            return Math.abs(dy) > 32.0 && distSq > 1600.0;
+        if (occlusionActive && distSq > 256.0) {
+            AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0);
+            return OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ, false);
         }
 
         return false;
     }
 
     public static boolean shouldCullParticle(AABB box) {
-        if ((!frustumActive && !occlusionActive) || box == null) {
+        if ((!frustumActive && !occlusionActive) || box == null || !RenderSystem.isOnRenderThread()) {
             return false;
         }
 

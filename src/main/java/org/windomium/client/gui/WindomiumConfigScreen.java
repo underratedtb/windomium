@@ -55,45 +55,38 @@ public final class WindomiumConfigScreen extends Screen {
             button.setMessage(getOcclusionText());
         }).bounds(centreX + 5, startY + rowSpacing, buttonWidth, buttonHeight).build());
 
-        this.addRenderableWidget(Button.builder(getAsyncMeshText(), button -> {
-            boolean next = !WindomiumConfig.ENABLE_ASYNC_MESHING.get();
-            WindomiumConfig.ENABLE_ASYNC_MESHING.set(next);
-            ModuleManager.setModuleState("chunk_mesher", next);
-            button.setMessage(getAsyncMeshText());
-        }).bounds(centreX - 160, startY + rowSpacing * 2, buttonWidth, buttonHeight).build());
-
         this.addRenderableWidget(Button.builder(getEntityOptText(), button -> {
             boolean next = !WindomiumConfig.ENABLE_ENTITY_OPTIMISER.get();
             WindomiumConfig.ENABLE_ENTITY_OPTIMISER.set(next);
             ModuleManager.setModuleState("entity_optimiser", next);
             button.setMessage(getEntityOptText());
-        }).bounds(centreX + 5, startY + rowSpacing * 2, buttonWidth, buttonHeight).build());
+        }).bounds(centreX - 160, startY + rowSpacing * 2, buttonWidth, buttonHeight).build());
 
         this.addRenderableWidget(Button.builder(getBlockEntityOptText(), button -> {
             boolean next = !WindomiumConfig.ENABLE_BLOCK_ENTITY_OPTIMISER.get();
             WindomiumConfig.ENABLE_BLOCK_ENTITY_OPTIMISER.set(next);
             ModuleManager.setModuleState("block_entity_optimiser", next);
             button.setMessage(getBlockEntityOptText());
-        }).bounds(centreX - 160, startY + rowSpacing * 3, buttonWidth, buttonHeight).build());
+        }).bounds(centreX + 5, startY + rowSpacing * 2, buttonWidth, buttonHeight).build());
 
         this.addRenderableWidget(Button.builder(getMemoryOptText(), button -> {
             boolean next = !WindomiumConfig.ENABLE_MEMORY_OPTIMISER.get();
             WindomiumConfig.ENABLE_MEMORY_OPTIMISER.set(next);
             ModuleManager.setModuleState("memory_optimiser", next);
             button.setMessage(getMemoryOptText());
-        }).bounds(centreX + 5, startY + rowSpacing * 3, buttonWidth, buttonHeight).build());
+        }).bounds(centreX - 160, startY + rowSpacing * 3, buttonWidth, buttonHeight).build());
 
         this.addRenderableWidget(Button.builder(getGovernorText(), button -> {
             boolean next = !WindomiumConfig.ENABLE_RUNTIME_GOVERNOR.get();
             WindomiumConfig.ENABLE_RUNTIME_GOVERNOR.set(next);
             button.setMessage(getGovernorText());
-        }).bounds(centreX - 160, startY + rowSpacing * 4, buttonWidth, buttonHeight).build());
+        }).bounds(centreX + 5, startY + rowSpacing * 3, buttonWidth, buttonHeight).build());
 
         this.addRenderableWidget(Button.builder(getOverlayText(), button -> {
             boolean next = !WindomiumConfig.SHOW_PROFILER_OVERLAY.get();
             WindomiumConfig.SHOW_PROFILER_OVERLAY.set(next);
             button.setMessage(getOverlayText());
-        }).bounds(centreX + 5, startY + rowSpacing * 4, buttonWidth, buttonHeight).build());
+        }).bounds(centreX - 160, startY + rowSpacing * 4, buttonWidth * 2 + 10, buttonHeight).build());
 
         this.addRenderableWidget(Button.builder(getServerOptText(), button -> {
             if (WindomiumConfig.SERVER_SPEC.isLoaded()) {
@@ -145,10 +138,6 @@ public final class WindomiumConfigScreen extends Screen {
         return Component.literal("Occlusion Culling: " + (WindomiumConfig.ENABLE_OCCLUSION_CULLING.get() ? "ON" : "OFF"));
     }
 
-    private static Component getAsyncMeshText() {
-        return Component.literal("Async Meshing: " + (WindomiumConfig.ENABLE_ASYNC_MESHING.get() ? "ON" : "OFF"));
-    }
-
     private static Component getEntityOptText() {
         return Component.literal("Entity Optimiser: " + (WindomiumConfig.ENABLE_ENTITY_OPTIMISER.get() ? "ON" : "OFF"));
     }
@@ -171,6 +160,6 @@ public final class WindomiumConfigScreen extends Screen {
 
     private static Component getServerOptText() {
         boolean active = WindomiumConfig.SERVER_SPEC.isLoaded() && WindomiumConfig.ENABLE_SERVER_OPTIMISATIONS.get();
-        return Component.literal("Server Distant Mob Tick Throttler (Experimental): " + (active ? "ON" : "OFF"));
+        return Component.literal("Server Distant Mob Tick Throttler: " + (active ? "ON" : "OFF"));
     }
 }

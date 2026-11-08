@@ -24,7 +24,7 @@ public final class ServerTickOptimiser {
             return false;
         }
 
-        if (!(entity instanceof Mob mob)) {
+        if (!(entity instanceof Mob mob) || mob.noCulling) {
             return false;
         }
 
@@ -32,17 +32,20 @@ public final class ServerTickOptimiser {
             return false;
         }
 
-        Player nearestPlayer = level.getNearestPlayer(mob, 128.0);
+        long gameTime = level.getGameTime();
+        long entityId = mob.getId();
+
+        Player nearestPlayer = level.getNearestPlayer(mob.getX(), mob.getY(), mob.getZ(), 128.0, false);
         if (nearestPlayer == null) {
-            return ((mob.tickCount + mob.getId()) & 3) != 0;
+            return ((gameTime + entityId) & 3L) != 0L;
         }
 
         double distSq = mob.distanceToSqr(nearestPlayer);
         if (distSq > 64.0 * 64.0) {
-            return ((mob.tickCount + mob.getId()) & 3) != 0;
+            return ((gameTime + entityId) & 3L) != 0L;
         }
         if (distSq > 36.0 * 36.0) {
-            return ((mob.tickCount + mob.getId()) & 1) != 0;
+            return ((gameTime + entityId) & 1L) != 0L;
         }
 
         return false;

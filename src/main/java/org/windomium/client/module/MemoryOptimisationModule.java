@@ -3,8 +3,6 @@ package org.windomium.client.module;
 import org.windomium.api.IOptimisationModule;
 import org.windomium.api.OptimisationCategory;
 import org.windomium.api.RiskLevel;
-import org.windomium.core.config.WindomiumConfig;
-import org.windomium.core.memory.BiomeColourCache;
 import org.windomium.core.memory.MemoryOptimiserController;
 
 public final class MemoryOptimisationModule implements IOptimisationModule {
@@ -44,10 +42,6 @@ public final class MemoryOptimisationModule implements IOptimisationModule {
 
     @Override
     public void onEnable() {
-        int cacheSize = WindomiumConfig.CLIENT_SPEC.isLoaded()
-                ? WindomiumConfig.BIOME_COLOUR_CACHE_SIZE.get()
-                : 2048;
-        BiomeColourCache.setMaxEntriesPerThread(cacheSize);
     }
 
     @Override
