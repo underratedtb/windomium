@@ -1,9 +1,11 @@
 package org.windomium.client.culling;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import org.windomium.core.memory.ObjectPoolManager;
@@ -30,6 +32,9 @@ public final class OcclusionCuller {
     }
 
     public static void onFrameBegin(double camX, double camY, double camZ) {
+        if (!RenderSystem.isOnRenderThread()) {
+            return;
+        }
         raycastsThisFrame = 0;
         framesSinceCachePurge++;
 
@@ -37,7 +42,7 @@ public final class OcclusionCuller {
         int ry = ((int) Math.floor(camY)) >> 2;
         int rz = ((int) Math.floor(camZ)) >> 2;
 
-        if (rx != camRegionX || ry != camRegionY || rz != camRegionZ || framesSinceCachePurge >= 12) {
+        if (rx != camRegionX || ry != camRegionY || rz != camRegionZ || framesSinceCachePurge >= 8) {
             camRegionX = rx;
             camRegionY = ry;
             camRegionZ = rz;
@@ -46,7 +51,57 @@ public final class OcclusionCuller {
         }
     }
 
+    public static boolean isBlockPosOccluded(BlockPos pos, double camX, double camY, double camZ) {
+        if (!RenderSystem.isOnRenderThread() || pos == null) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null || (mc.player != null && mc.player.isSpectator())) {
+            return false;
+        }
+
+        double centreX = pos.getX() + 0.5;
+        double centreY = pos.getY() + 0.5;
+        double centreZ = pos.getZ() + 0.5;
+
+        double dx = centreX - camX;
+        double dy = centreY - camY;
+        double dz = centreZ - camZ;
+        double totalDistSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+        if (totalDistSq < 256.0) {
+            return false;
+        }
+
+        long cacheKey = packKey(camRegionX, camRegionY, camRegionZ, pos.getX(), pos.getY(), pos.getZ(), false);
+        byte cachedState = VISIBILITY_CACHE.get(cacheKey);
+        if (cachedState != UNKNOWN) {
+            return cachedState == OCCLUDED;
+        }
+
+        if (raycastsThisFrame >= MAX_RAYCASTS_PER_FRAME) {
+            return false;
+        }
+        raycastsThisFrame++;
+
+        boolean occluded = isRayBlocked(level, camX, camY, camZ, centreX, centreY, centreZ, totalDistSq)
+                && isRayBlocked(level, camX, camY, camZ, centreX, pos.getY() + 0.85, centreZ, totalDistSq)
+                && isRayBlocked(level, camX, camY, camZ, pos.getX() + 0.15, centreY, pos.getZ() + 0.15, totalDistSq)
+                && isRayBlocked(level, camX, camY, camZ, pos.getX() + 0.85, centreY, pos.getZ() + 0.85, totalDistSq);
+
+        if (VISIBILITY_CACHE.size() < MAX_CACHE_SIZE) {
+            VISIBILITY_CACHE.put(cacheKey, occluded ? OCCLUDED : VISIBLE);
+        }
+        return occluded;
+    }
+
     public static boolean isBoxOccluded(AABB box, double camX, double camY, double camZ, boolean isSection) {
+        if (!RenderSystem.isOnRenderThread() || box == null) {
+            return false;
+        }
+
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null || (mc.player != null && mc.player.isSpectator())) {
@@ -130,7 +185,7 @@ public final class OcclusionCuller {
             for (int i = 2; i < steps - 1; i++) {
                 mutablePos.set((int) Math.floor(currentX), (int) Math.floor(currentY), (int) Math.floor(currentZ));
                 BlockState state = level.getBlockState(mutablePos);
-                if (state.isSolidRender(level, mutablePos)) {
+                if (state.isSolidRender(level, mutablePos) && !(state.getBlock() instanceof LeavesBlock)) {
                     opaqueHits++;
                     if (opaqueHits >= 2) {
                         return true;
@@ -155,6 +210,8 @@ public final class OcclusionCuller {
     }
 
     public static void clearCache() {
-        VISIBILITY_CACHE.clear();
+        if (RenderSystem.isOnRenderThread()) {
+            VISIBILITY_CACHE.clear();
+        }
     }
 }

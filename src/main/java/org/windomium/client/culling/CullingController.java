@@ -135,7 +135,7 @@ public final class CullingController {
         }
 
         long now = System.nanoTime();
-        if (now - lastGovernorUpdateNs < 500_000_000L) {
+        if (now - lastGovernorUpdateNs < 1_000_000_000L) {
             return;
         }
         lastGovernorUpdateNs = now;
@@ -163,14 +163,14 @@ public final class CullingController {
         int activeSceneObjects = timings.getRenderedEntities() + timings.getRenderedBlockEntities();
         boolean sceneHasScalableLoad = activeSceneObjects >= 10 || timings.getCullingTimeMs() > 0.25;
 
-        boolean belowAvgTarget = currentFps < targetFps * 0.88;
-        boolean belowOnePercentTarget = currentOnePercent < targetOnePercent * 0.82;
-        boolean aboveRecoveryThreshold = currentFps >= targetFps * 0.96 && currentOnePercent >= targetOnePercent * 0.90;
+        boolean belowAvgTarget = currentFps < targetFps * 0.85;
+        boolean belowOnePercentTarget = currentOnePercent < targetOnePercent * 0.80;
+        boolean aboveRecoveryThreshold = currentFps >= targetFps * 0.96 && currentOnePercent >= targetOnePercent * 0.92;
 
         if ((belowAvgTarget || belowOnePercentTarget) && sceneHasScalableLoad) {
-            dynamicQualityScale = Math.max(0.65, dynamicQualityScale - 0.04);
+            dynamicQualityScale = Math.max(0.65, dynamicQualityScale - 0.025);
         } else if (aboveRecoveryThreshold) {
-            dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.04);
+            dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.025);
         } else if (!sceneHasScalableLoad && dynamicQualityScale < 1.0) {
             dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.02);
         }
@@ -305,8 +305,7 @@ public final class CullingController {
             }
 
             if (occlusionActive && distSq > 256.0) {
-                AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0);
-                return OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ, false);
+                return OcclusionCuller.isBlockPosOccluded(pos, cameraX, cameraY, cameraZ);
             }
 
             return false;

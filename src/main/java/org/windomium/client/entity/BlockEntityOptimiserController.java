@@ -31,6 +31,7 @@ public final class BlockEntityOptimiserController {
     private static long accumulatedTimeNs = 0L;
     private static long currentRenderStartNs = 0L;
     private static long frameCounter = 0L;
+    private static int sampleCounter = 0;
 
     private BlockEntityOptimiserController() {
     }
@@ -156,7 +157,7 @@ public final class BlockEntityOptimiserController {
     }
 
     public static void beginRenderSample() {
-        if (active) {
+        if (active && ((sampleCounter++ & 7) == 0)) {
             currentRenderStartNs = System.nanoTime();
         }
     }
@@ -165,7 +166,7 @@ public final class BlockEntityOptimiserController {
         if (active && currentRenderStartNs != 0L) {
             long elapsed = System.nanoTime() - currentRenderStartNs;
             if (elapsed > 0L) {
-                accumulatedTimeNs += elapsed;
+                accumulatedTimeNs += (elapsed * 8L);
             }
             currentRenderStartNs = 0L;
         }

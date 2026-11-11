@@ -1,6 +1,5 @@
 package org.windomium.mixin;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -22,12 +21,11 @@ public abstract class LeavesBlockMixin extends Block {
         if (ModuleManager.isModuleActive("leaf_culling")
                 && (!WindomiumConfig.CLIENT_SPEC.isLoaded() || WindomiumConfig.ENABLE_LEAF_CULLING.get())) {
             try {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null && mc.level != null && adjacentBlockState.getBlock() instanceof LeavesBlock) {
+                if (adjacentBlockState.getBlock() instanceof LeavesBlock) {
                     Preset preset = WindomiumConfig.CLIENT_SPEC.isLoaded()
                             ? WindomiumConfig.ACTIVE_PRESET.get()
                             : Preset.BALANCED;
-                    if (preset != Preset.SAFE || adjacentBlockState.getBlock() == state.getBlock()) {
+                    if (preset == Preset.EXTREME || adjacentBlockState.getBlock() == state.getBlock()) {
                         return true;
                     }
                 }
