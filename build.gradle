@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.74'
 }
 
-version = '0.2.0-beta.2'
+version = '0.2.0-beta.3'
 group = 'org.windomium'
 
 base {

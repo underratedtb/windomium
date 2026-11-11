@@ -1,25 +1,24 @@
 modLoader="javafml"
 loaderVersion="[4,)"
 license="GNU Lesser General Public License v3.0 (LGPL-3.0)"
-issueTrackerURL="https://github.com/windomium/windomium/issues"
+issueTrackerURL="https://github.com/underratedtb/windomium/issues"
 
 [[mods]]
 modId="windomium"
-version="0.2.0-beta.2"
+version="0.2.0-beta.3"
 displayName="Windomium"
 displayURL="https://github.com/underratedtb/windomium"
 authors="underratedtb"
 description='''
-Windomium is a modular, open-source optimisation engine and performance framework for Minecraft (NeoForge 1.21.1).
+Windomium is a modular, open-source optimisation engine and companion performance framework for Minecraft (NeoForge 1.21.1).
 
 Key Features:
-- Ray-Marched Occlusion & Frustum Culling (Selectable in real time)
-- Asynchronous Multi-Threaded Chunk Meshing Pool
+- Multi-Point Ray-Marched Occlusion & Frustum Culling
+- Smart Interior Leaf Face Culling & Unfocused Background FPS Limiter
 - Entity Shadow, Equipment Layer & NameTag Distance Culling
-- Block Entity Frame-Budget Rate Limiter
-- Fastutil Thread-Local Biome Colour Caching & Object Pooling
-- Adaptive Runtime Governor (1% & 0.1% Low FPS Stabiliser)
-- Built-in Compatibility Profiles for Create, Mekanism, AE2, Botania & Sodium/Iris
+- Block Entity Nanosecond Frame-Budget Rate Limiter
+- Self-Healing Thread-Safe Circuit Breaker & Adaptive Runtime Governor
+- Built-in Compatibility Profiles for Create, Valkyrien Skies, Mekanism, AE2, Botania & Sodium/Iris
 '''
 
 [[mixins]]

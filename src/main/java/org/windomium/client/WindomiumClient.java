@@ -48,6 +48,11 @@ public final class WindomiumClient {
     }
 
     @SubscribeEvent
+    public static void onClientTickPre(ClientTickEvent.Pre event) {
+        CullingController.onClientTick();
+    }
+
+    @SubscribeEvent
     public static void onClientTickPost(ClientTickEvent.Post event) {
         WindomiumKeyMappings.handleClientTick();
     }

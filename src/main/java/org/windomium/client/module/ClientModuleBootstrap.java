@@ -20,9 +20,11 @@ public final class ClientModuleBootstrap {
         registered = true;
         WindomiumAPI.registerModule(new SimpleClientModule("frustum_culling", "Section & Entity Frustum Culling", OptimisationCategory.CHUNK_RENDERING, () -> {}, () -> {}));
         WindomiumAPI.registerModule(new SimpleClientModule("occlusion_culling", "Ray-Marched Occlusion Culling", OptimisationCategory.CHUNK_RENDERING, OcclusionCuller::clearCache, OcclusionCuller::clearCache));
+        WindomiumAPI.registerModule(new SimpleClientModule("leaf_culling", "Smart Interior Leaf Face Culling", OptimisationCategory.CHUNK_RENDERING, () -> {}, () -> {}));
         WindomiumAPI.registerModule(new SimpleClientModule("entity_optimiser", "Entity Layer & Shadow Optimiser", OptimisationCategory.ENTITY, () -> {}, () -> {}));
         WindomiumAPI.registerModule(new SimpleClientModule("block_entity_optimiser", "Block Entity Culling & Rate Limiter", OptimisationCategory.BLOCK_ENTITY, () -> {}, () -> {}));
         WindomiumAPI.registerModule(new SimpleClientModule("particle_optimiser", "Particle Distance & Budget Limiter", OptimisationCategory.PARTICLE_AND_UI, () -> {}, () -> {}));
+        WindomiumAPI.registerModule(new SimpleClientModule("unfocused_fps", "Background Window Power Saver", OptimisationCategory.PARTICLE_AND_UI, () -> {}, () -> {}));
         WindomiumAPI.registerModule(new SimpleClientModule("memory_optimiser", "Fastutil Cache & Memory Optimiser", OptimisationCategory.MEMORY_AND_LOADING, () -> {}, MemoryOptimiserController::trimCaches));
     }
 

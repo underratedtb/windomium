@@ -13,6 +13,8 @@
     "FrustumMixin",
     "HumanoidArmorLayerMixin",
     "ItemInHandLayerMixin",
+    "LeavesBlockMixin",
+    "MinecraftFpsMixin",
     "ParticleEngineMixin"
   ],
   "server": [],

@@ -35,9 +35,8 @@ public final class CullingController {
     private static double maxParticleDistanceSq = 64.0 * 64.0;
     private static double dynamicQualityScale = 1.0;
     private static long lastGovernorUpdateNs = 0L;
-    private static long lastParticleTick = Long.MIN_VALUE;
     private static int activeTickParticles = 0;
-    private static int maxParticlesPerTick = 200;
+    private static int maxParticlesPerTick = 220;
     private static int timingSampleCounter = 0;
     private static boolean frustumActive = false;
     private static boolean occlusionActive = false;
@@ -45,6 +44,10 @@ public final class CullingController {
     private static CullingMode activeCullingMode = CullingMode.COMBINED;
 
     private CullingController() {
+    }
+
+    public static void onClientTick() {
+        activeTickParticles = 0;
     }
 
     public static void onFrameBegin() {
@@ -56,12 +59,6 @@ public final class CullingController {
             occlusionActive = false;
             particleActive = false;
             return;
-        }
-
-        long currentTick = mc.level.getGameTime();
-        if (currentTick != lastParticleTick) {
-            lastParticleTick = currentTick;
-            activeTickParticles = 0;
         }
 
         boolean configLoaded = WindomiumConfig.CLIENT_SPEC.isLoaded();
@@ -168,10 +165,11 @@ public final class CullingController {
 
         boolean belowAvgTarget = currentFps < targetFps * 0.88;
         boolean belowOnePercentTarget = currentOnePercent < targetOnePercent * 0.82;
+        boolean aboveRecoveryThreshold = currentFps >= targetFps * 0.96 && currentOnePercent >= targetOnePercent * 0.90;
 
         if ((belowAvgTarget || belowOnePercentTarget) && sceneHasScalableLoad) {
             dynamicQualityScale = Math.max(0.65, dynamicQualityScale - 0.04);
-        } else if (!belowAvgTarget && !belowOnePercentTarget) {
+        } else if (aboveRecoveryThreshold) {
             dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.04);
         } else if (!sceneHasScalableLoad && dynamicQualityScale < 1.0) {
             dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.02);
@@ -222,6 +220,9 @@ public final class CullingController {
 
             ClientProfilerManager.getSectionTimings().incrementRenderedSections(1);
             return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException(occlusionActive ? "occlusion_culling" : "frustum_culling", throwable);
+            return false;
         } finally {
             if (sampleTime) {
                 ClientProfilerManager.getSectionTimings().addCullingTimeNs((System.nanoTime() - startNs) * 64L);
@@ -234,44 +235,49 @@ public final class CullingController {
             return false;
         }
 
-        if (entity.noCulling || entity instanceof Player || entity.isSpectator() || entity.isCurrentlyGlowing() || entity.hasCustomName() || entity.isVehicle() || entity.isPassenger()) {
+        try {
+            if (entity.noCulling || entity instanceof Player || entity.isSpectator() || entity.isCurrentlyGlowing() || entity.hasCustomName() || entity.isVehicle() || entity.isPassenger()) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
+                return false;
+            }
+
+            if (ModCompatibilityManager.isClassBypassed(entity.getClass().getName())) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
+                return false;
+            }
+
+            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+            if (key != null && WindomiumAPI.getEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE) == RenderBehaviour.DO_NOT_TOUCH) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
+                return false;
+            }
+
+            double distSq = entity.distanceToSqr(camX, camY, camZ);
+            if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
+                return false;
+            }
+
+            AABB boundingBox = entity.getBoundingBox();
+            double sizeScale = Math.max(1.0, Math.min(4.0, boundingBox.getSize()));
+            double effectiveMaxDistSq = maxEntityDistanceSq * sizeScale * sizeScale;
+
+            if (frustumActive && distSq > effectiveMaxDistSq) {
+                ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
+                return true;
+            }
+
+            if (occlusionActive && distSq > 256.0 && OcclusionCuller.isBoxOccluded(boundingBox, camX, camY, camZ, false)) {
+                ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
+                return true;
+            }
+
             ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
             return false;
-        }
-
-        if (ModCompatibilityManager.isClassBypassed(entity.getClass().getName())) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException(occlusionActive ? "occlusion_culling" : "frustum_culling", throwable);
             return false;
         }
-
-        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
-        if (key != null && WindomiumAPI.getEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE) == RenderBehaviour.DO_NOT_TOUCH) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
-            return false;
-        }
-
-        double distSq = entity.distanceToSqr(camX, camY, camZ);
-        if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
-            return false;
-        }
-
-        AABB boundingBox = entity.getBoundingBox();
-        double sizeScale = Math.max(1.0, Math.min(4.0, boundingBox.getSize()));
-        double effectiveMaxDistSq = maxEntityDistanceSq * sizeScale * sizeScale;
-
-        if (frustumActive && distSq > effectiveMaxDistSq) {
-            ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
-            return true;
-        }
-
-        if (occlusionActive && distSq > 256.0 && OcclusionCuller.isBoxOccluded(boundingBox, camX, camY, camZ, false)) {
-            ClientProfilerManager.getSectionTimings().incrementCulledEntities(1);
-            return true;
-        }
-
-        ClientProfilerManager.getSectionTimings().incrementRenderedEntities(1);
-        return false;
     }
 
     public static boolean shouldCullBlockEntity(BlockEntity blockEntity) {
@@ -279,30 +285,35 @@ public final class CullingController {
             return false;
         }
 
-        if (ModCompatibilityManager.isClassBypassed(blockEntity.getClass().getName())) {
+        try {
+            if (ModCompatibilityManager.isClassBypassed(blockEntity.getClass().getName())) {
+                return false;
+            }
+
+            BlockPos pos = blockEntity.getBlockPos();
+            double dx = (pos.getX() + 0.5) - cameraX;
+            double dy = (pos.getY() + 0.5) - cameraY;
+            double dz = (pos.getZ() + 0.5) - cameraZ;
+            double distSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+            if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
+                return false;
+            }
+
+            if (frustumActive && distSq > maxBlockEntityDistanceSq) {
+                return true;
+            }
+
+            if (occlusionActive && distSq > 256.0) {
+                AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0);
+                return OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ, false);
+            }
+
+            return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException(occlusionActive ? "occlusion_culling" : "frustum_culling", throwable);
             return false;
         }
-
-        BlockPos pos = blockEntity.getBlockPos();
-        double dx = (pos.getX() + 0.5) - cameraX;
-        double dy = (pos.getY() + 0.5) - cameraY;
-        double dz = (pos.getZ() + 0.5) - cameraZ;
-        double distSq = (dx * dx) + (dy * dy) + (dz * dz);
-
-        if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
-            return false;
-        }
-
-        if (frustumActive && distSq > maxBlockEntityDistanceSq) {
-            return true;
-        }
-
-        if (occlusionActive && distSq > 256.0) {
-            AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0);
-            return OcclusionCuller.isBoxOccluded(box, cameraX, cameraY, cameraZ, false);
-        }
-
-        return false;
     }
 
     public static boolean shouldCullParticle(AABB box) {
@@ -310,26 +321,31 @@ public final class CullingController {
             return false;
         }
 
-        if (activeTickParticles >= maxParticlesPerTick) {
-            return true;
-        }
+        try {
+            if (activeTickParticles >= maxParticlesPerTick) {
+                return true;
+            }
 
-        double dx = box.minX - cameraX;
-        double dy = box.minY - cameraY;
-        double dz = box.minZ - cameraZ;
-        double distSq = (dx * dx) + (dy * dy) + (dz * dz);
+            double dx = box.minX - cameraX;
+            double dy = box.minY - cameraY;
+            double dz = box.minZ - cameraZ;
+            double distSq = (dx * dx) + (dy * dy) + (dz * dz);
 
-        if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
+            if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
+                activeTickParticles++;
+                return false;
+            }
+
+            if (distSq > maxParticleDistanceSq) {
+                return true;
+            }
+
             activeTickParticles++;
             return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException("particle_optimiser", throwable);
+            return false;
         }
-
-        if (distSq > maxParticleDistanceSq) {
-            return true;
-        }
-
-        activeTickParticles++;
-        return false;
     }
 
     public static double getDynamicQualityScale() {

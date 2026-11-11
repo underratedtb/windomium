@@ -1,6 +1,9 @@
 package org.windomium.client.entity;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -75,46 +78,58 @@ public final class EntityOptimiserController {
     }
 
     public static boolean shouldSkipShadow(Entity entity) {
-        if (!moduleActive || entity == null || entity instanceof Player) {
+        if (!moduleActive || entity == null || entity instanceof Player || !RenderSystem.isOnRenderThread()) {
             return false;
         }
-
-        double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
-        if (distSq > maxShadowDistanceSq) {
-            ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
-            return true;
+        try {
+            double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
+            if (distSq > maxShadowDistanceSq) {
+                ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
+                return true;
+            }
+            return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException("entity_optimiser", throwable);
+            return false;
         }
-        return false;
     }
 
     public static boolean shouldSkipNameTag(Entity entity) {
-        if (!moduleActive || entity == null || entity instanceof Player) {
+        if (!moduleActive || entity == null || entity instanceof Player || !RenderSystem.isOnRenderThread()) {
             return false;
         }
-
-        double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
-        if (distSq > maxNameTagDistanceSq) {
-            ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
-            return true;
+        try {
+            double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
+            if (distSq > maxNameTagDistanceSq) {
+                ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
+                return true;
+            }
+            return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException("entity_optimiser", throwable);
+            return false;
         }
-        return false;
     }
 
     public static boolean shouldSkipEquipmentLayer(LivingEntity entity) {
-        if (!moduleActive || entity == null || entity instanceof Player) {
+        if (!moduleActive || entity == null || entity instanceof Player || !RenderSystem.isOnRenderThread()) {
             return false;
         }
+        try {
+            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+            if (key != null && WindomiumAPI.getEntityBehaviour(key.toString()).orElse(RenderBehaviour.THROTTLEABLE) == RenderBehaviour.DO_NOT_TOUCH) {
+                return false;
+            }
 
-        String entityId = entity.getType().toString();
-        if (WindomiumAPI.getEntityBehaviour(entityId).orElse(RenderBehaviour.THROTTLEABLE) == RenderBehaviour.DO_NOT_TOUCH) {
+            double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
+            if (distSq > maxLayerDistanceSq) {
+                ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
+                return true;
+            }
+            return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException("entity_optimiser", throwable);
             return false;
         }
-
-        double distSq = entity.distanceToSqr(cameraX, cameraY, cameraZ);
-        if (distSq > maxLayerDistanceSq) {
-            ClientProfilerManager.getSectionTimings().incrementSkippedEntityLayers(1);
-            return true;
-        }
-        return false;
     }
 }

@@ -92,62 +92,67 @@ public final class BlockEntityOptimiserController {
             return false;
         }
 
-        if (blockEntity instanceof BeaconBlockEntity) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-            return false;
-        }
+        try {
+            if (blockEntity instanceof BeaconBlockEntity) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+                return false;
+            }
 
-        if (CullingController.shouldCullBlockEntity(blockEntity)) {
-            ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
-            return true;
-        }
-
-        if (!active) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-            return false;
-        }
-
-        if (ModCompatibilityManager.isClassBypassed(blockEntity.getClass().getName())) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-            return false;
-        }
-
-        ResourceLocation key = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType());
-        RenderBehaviour behaviour = key != null
-                ? WindomiumAPI.getBlockEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE)
-                : RenderBehaviour.CULLABLE;
-
-        if (behaviour == RenderBehaviour.DO_NOT_TOUCH) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-            return false;
-        }
-
-        BlockPos pos = blockEntity.getBlockPos();
-        double dx = (pos.getX() + 0.5) - cameraX;
-        double dy = (pos.getY() + 0.5) - cameraY;
-        double dz = (pos.getZ() + 0.5) - cameraZ;
-        double distSq = (dx * dx) + (dy * dy) + (dz * dz);
-
-        if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
-            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-            return false;
-        }
-
-        if (behaviour == RenderBehaviour.CULLABLE && distSq > maxDistanceSq) {
-            ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
-            return true;
-        }
-
-        if (accumulatedTimeNs > frameBudgetNs && distSq > throttleStartDistSq) {
-            long hash = (pos.asLong() ^ frameCounter) & 3L;
-            if (hash != 0L) {
+            if (CullingController.shouldCullBlockEntity(blockEntity)) {
                 ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
                 return true;
             }
-        }
 
-        ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
-        return false;
+            if (!active) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+                return false;
+            }
+
+            if (ModCompatibilityManager.isClassBypassed(blockEntity.getClass().getName())) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+                return false;
+            }
+
+            ResourceLocation key = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType());
+            RenderBehaviour behaviour = key != null
+                    ? WindomiumAPI.getBlockEntityBehaviour(key.toString()).orElse(RenderBehaviour.CULLABLE)
+                    : RenderBehaviour.CULLABLE;
+
+            if (behaviour == RenderBehaviour.DO_NOT_TOUCH) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+                return false;
+            }
+
+            BlockPos pos = blockEntity.getBlockPos();
+            double dx = (pos.getX() + 0.5) - cameraX;
+            double dy = (pos.getY() + 0.5) - cameraY;
+            double dz = (pos.getZ() + 0.5) - cameraZ;
+            double distSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+            if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
+                ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+                return false;
+            }
+
+            if (behaviour == RenderBehaviour.CULLABLE && distSq > maxDistanceSq) {
+                ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
+                return true;
+            }
+
+            if (accumulatedTimeNs > frameBudgetNs && distSq > throttleStartDistSq) {
+                long hash = (pos.asLong() ^ frameCounter) & 3L;
+                if (hash != 0L) {
+                    ClientProfilerManager.getSectionTimings().incrementCulledBlockEntities(1);
+                    return true;
+                }
+            }
+
+            ClientProfilerManager.getSectionTimings().incrementRenderedBlockEntities(1);
+            return false;
+        } catch (Throwable throwable) {
+            ModuleManager.handleModuleException("block_entity_optimiser", throwable);
+            return false;
+        }
     }
 
     public static void beginRenderSample() {
