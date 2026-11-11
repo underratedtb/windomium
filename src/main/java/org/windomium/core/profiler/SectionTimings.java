@@ -55,8 +55,12 @@ public final class SectionTimings {
         this.chunkMeshTimeNs = ns;
     }
 
-    public void setCullingTimeNs(long ns) {
+    public void addCullingTimeNs(long ns) {
         this.activeCullingTimeNs += ns;
+    }
+
+    public void setCullingTimeNs(long ns) {
+        addCullingTimeNs(ns);
     }
 
     public void incrementRenderedSections(int count) {

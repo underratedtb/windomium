@@ -1,5 +1,8 @@
 package org.windomium.client;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -18,14 +21,29 @@ import org.windomium.client.entity.EntityOptimiserController;
 import org.windomium.client.profiler.ClientProfilerManager;
 import org.windomium.client.profiler.ProfilerOverlay;
 import org.windomium.core.memory.MemoryOptimiserController;
+import org.windomium.core.module.ModuleManager;
 
 @EventBusSubscriber(modid = Windomium.MOD_ID, value = Dist.CLIENT)
 public final class WindomiumClient {
+    static {
+        ModuleManager.setFaultNotifier((moduleName, error) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> {
+                    if (mc.player != null) {
+                        Component alert = Component.literal("[Windomium Circuit Breaker] Module '" + moduleName + "' tripped after repeated errors and was rolled back.")
+                                .withStyle(ChatFormatting.RED);
+                        mc.player.sendSystemMessage(alert);
+                    }
+                });
+            }
+        });
+    }
+
     private WindomiumClient() {
     }
 
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
-        event.register(WindomiumKeyMappings.OPEN_CONFIG_KEY);
         event.register(WindomiumKeyMappings.TOGGLE_OVERLAY_KEY);
     }
 

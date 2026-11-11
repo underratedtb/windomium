@@ -21,6 +21,7 @@ import org.windomium.core.config.Preset;
 import org.windomium.core.config.WindomiumConfig;
 import org.windomium.core.module.ModuleManager;
 import org.windomium.core.profiler.FrameMetricsSnapshot;
+import org.windomium.core.profiler.SectionTimings;
 
 public final class CullingController {
     private static final double SUB_LEVEL_DISTANCE_SQ_THRESHOLD = 268_435_456.0;
@@ -34,11 +35,13 @@ public final class CullingController {
     private static double maxParticleDistanceSq = 64.0 * 64.0;
     private static double dynamicQualityScale = 1.0;
     private static long lastGovernorUpdateNs = 0L;
-    private static int activeFrameParticles = 0;
-    private static int maxParticlesPerFrame = 500;
+    private static long lastParticleTick = Long.MIN_VALUE;
+    private static int activeTickParticles = 0;
+    private static int maxParticlesPerTick = 200;
     private static int timingSampleCounter = 0;
     private static boolean frustumActive = false;
     private static boolean occlusionActive = false;
+    private static boolean particleActive = false;
     private static CullingMode activeCullingMode = CullingMode.COMBINED;
 
     private CullingController() {
@@ -46,13 +49,19 @@ public final class CullingController {
 
     public static void onFrameBegin() {
         ClientProfilerManager.getSectionTimings().resetCounters();
-        activeFrameParticles = 0;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.gameRenderer == null) {
             frustumActive = false;
             occlusionActive = false;
+            particleActive = false;
             return;
+        }
+
+        long currentTick = mc.level.getGameTime();
+        if (currentTick != lastParticleTick) {
+            lastParticleTick = currentTick;
+            activeTickParticles = 0;
         }
 
         boolean configLoaded = WindomiumConfig.CLIENT_SPEC.isLoaded();
@@ -68,6 +77,8 @@ public final class CullingController {
         occlusionActive = occlusionToggle
                 && ModuleManager.isModuleActive("occlusion_culling")
                 && (activeCullingMode == CullingMode.OCCLUSION || activeCullingMode == CullingMode.COMBINED);
+
+        particleActive = ModuleManager.isModuleActive("particle_optimiser");
 
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 pos = camera.getPosition();
@@ -104,11 +115,11 @@ public final class CullingController {
             case EXTREME -> 36.0;
             case CUSTOM -> 64.0;
         };
-        maxParticlesPerFrame = switch (preset) {
-            case SAFE -> 800;
-            case BALANCED -> 400;
-            case EXTREME -> 150;
-            case CUSTOM -> 400;
+        maxParticlesPerTick = switch (preset) {
+            case SAFE -> 450;
+            case BALANCED -> 220;
+            case EXTREME -> 90;
+            case CUSTOM -> 220;
         };
 
         double scaledEntity = entityBase * dynamicQualityScale;
@@ -137,18 +148,33 @@ public final class CullingController {
             return;
         }
 
+        boolean vsync = mc.options.enableVsync().get();
+        int monitorHz = mc.getWindow().getRefreshRate();
+        int vsyncCap = (vsync && monitorHz > 0) ? monitorHz : 1000;
+
         int userLimit = mc.options.framerateLimit().get();
-        int effectiveLimit = (userLimit > 0 && userLimit < 260) ? userLimit : 1000;
-        int targetFps = Math.min(WindomiumConfig.TARGET_FPS.get(), effectiveLimit);
+        int fpsSliderCap = (userLimit > 0 && userLimit < 260) ? userLimit : 1000;
+
+        int effectiveCeiling = Math.min(fpsSliderCap, vsyncCap);
+        int targetFps = Math.min(WindomiumConfig.TARGET_FPS.get(), effectiveCeiling);
         int targetOnePercent = Math.min(WindomiumConfig.TARGET_ONE_PERCENT_LOW.get(), (int) (targetFps * 0.75));
 
         double currentFps = snapshot.averageFps();
         double currentOnePercent = snapshot.onePercentLowFps();
 
-        if (currentFps < targetFps * 0.88 || currentOnePercent < targetOnePercent * 0.85) {
+        SectionTimings timings = ClientProfilerManager.getSectionTimings();
+        int activeSceneObjects = timings.getRenderedEntities() + timings.getRenderedBlockEntities();
+        boolean sceneHasScalableLoad = activeSceneObjects >= 10 || timings.getCullingTimeMs() > 0.25;
+
+        boolean belowAvgTarget = currentFps < targetFps * 0.88;
+        boolean belowOnePercentTarget = currentOnePercent < targetOnePercent * 0.82;
+
+        if ((belowAvgTarget || belowOnePercentTarget) && sceneHasScalableLoad) {
             dynamicQualityScale = Math.max(0.65, dynamicQualityScale - 0.04);
-        } else if (currentFps >= targetFps * 0.96) {
+        } else if (!belowAvgTarget && !belowOnePercentTarget) {
             dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.04);
+        } else if (!sceneHasScalableLoad && dynamicQualityScale < 1.0) {
+            dynamicQualityScale = Math.min(1.0, dynamicQualityScale + 0.02);
         }
     }
 
@@ -198,7 +224,7 @@ public final class CullingController {
             return false;
         } finally {
             if (sampleTime) {
-                ClientProfilerManager.getSectionTimings().setCullingTimeNs((System.nanoTime() - startNs) * 64L);
+                ClientProfilerManager.getSectionTimings().addCullingTimeNs((System.nanoTime() - startNs) * 64L);
             }
         }
     }
@@ -280,11 +306,11 @@ public final class CullingController {
     }
 
     public static boolean shouldCullParticle(AABB box) {
-        if ((!frustumActive && !occlusionActive) || box == null || !RenderSystem.isOnRenderThread()) {
+        if (!particleActive || box == null || !RenderSystem.isOnRenderThread()) {
             return false;
         }
 
-        if (activeFrameParticles >= maxParticlesPerFrame) {
+        if (activeTickParticles >= maxParticlesPerTick) {
             return true;
         }
 
@@ -294,7 +320,7 @@ public final class CullingController {
         double distSq = (dx * dx) + (dy * dy) + (dz * dz);
 
         if (distSq > SUB_LEVEL_DISTANCE_SQ_THRESHOLD) {
-            activeFrameParticles++;
+            activeTickParticles++;
             return false;
         }
 
@@ -302,7 +328,7 @@ public final class CullingController {
             return true;
         }
 
-        activeFrameParticles++;
+        activeTickParticles++;
         return false;
     }
 

@@ -18,4 +18,8 @@ public interface IOptimisationModule {
     void onEnable();
 
     void onDisable();
+
+    default void onErrorRollback() {
+        onDisable();
+    }
 }

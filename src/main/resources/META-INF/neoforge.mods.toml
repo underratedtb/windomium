@@ -5,9 +5,9 @@ issueTrackerURL="https://github.com/windomium/windomium/issues"
 
 [[mods]]
 modId="windomium"
-version="0.1.0-alpha+1.21.1"
+version="0.2.0-beta.2"
 displayName="Windomium"
-displayURL="https://github.com/windomium/windomium"
+displayURL="https://github.com/underratedtb/windomium"
 authors="underratedtb"
 description='''
 Windomium is a modular, open-source optimisation engine and performance framework for Minecraft (NeoForge 1.21.1).

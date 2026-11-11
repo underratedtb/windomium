@@ -2,18 +2,17 @@ package org.windomium.client.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.neoforged.fml.ModList;
 import org.windomium.client.culling.CullingController;
 import org.windomium.client.culling.OcclusionCuller;
-import org.windomium.client.gui.WindomiumConfigScreen;
 import org.windomium.client.profiler.ClientProfilerManager;
 import org.windomium.core.compat.CompatibilityDetector;
 import org.windomium.core.compat.ModCompatibilityManager;
 import org.windomium.core.config.CullingMode;
+import org.windomium.core.config.Preset;
 import org.windomium.core.config.WindomiumConfig;
 import org.windomium.core.memory.JvmGcAdvisor;
 import org.windomium.core.memory.MemoryOptimiserController;
@@ -27,12 +26,16 @@ public final class WindomiumClientCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("windomium")
-                        .then(Commands.literal("config")
-                                .executes(context -> {
-                                    Minecraft mc = Minecraft.getInstance();
-                                    mc.tell(() -> mc.setScreen(new WindomiumConfigScreen(mc.screen)));
-                                    return 1;
-                                })
+                        .then(Commands.literal("preset")
+                                .then(Commands.literal("safe")
+                                        .executes(context -> applyPreset(context.getSource(), Preset.SAFE))
+                                )
+                                .then(Commands.literal("balanced")
+                                        .executes(context -> applyPreset(context.getSource(), Preset.BALANCED))
+                                )
+                                .then(Commands.literal("extreme")
+                                        .executes(context -> applyPreset(context.getSource(), Preset.EXTREME))
+                                )
                         )
                         .then(Commands.literal("culling")
                                 .then(Commands.literal("frustum")
@@ -49,6 +52,7 @@ public final class WindomiumClientCommands {
                                 .executes(context -> {
                                     boolean nextState = !WindomiumConfig.SHOW_PROFILER_OVERLAY.get();
                                     WindomiumConfig.SHOW_PROFILER_OVERLAY.set(nextState);
+                                    WindomiumConfig.CLIENT_SPEC.save();
                                     context.getSource().sendSuccess(
                                             () -> Component.literal("[Windomium] Profiler overlay " + (nextState ? "enabled." : "disabled.")),
                                             false
@@ -80,7 +84,7 @@ public final class WindomiumClientCommands {
                         .then(Commands.literal("modules")
                                 .executes(context -> {
                                     for (ModuleContainer container : ModuleManager.getAllModules()) {
-                                        String status = container.isFaulted() ? "FAULTED" : (container.isEnabled() ? "ENABLED" : "DISABLED");
+                                        String status = container.isFaulted() ? "FAULTED (CIRCUIT OPEN)" : (container.isEnabled() ? "ENABLED" : "DISABLED");
                                         String line = String.format(
                                                 "- %s (%s) [%s]: %s",
                                                 container.getModule().getDisplayName(),
@@ -90,6 +94,16 @@ public final class WindomiumClientCommands {
                                         );
                                         context.getSource().sendSuccess(() -> Component.literal(line), false);
                                     }
+                                    return 1;
+                                })
+                        )
+                        .then(Commands.literal("reset")
+                                .executes(context -> {
+                                    int recovered = ModuleManager.resetFaultedModules();
+                                    context.getSource().sendSuccess(
+                                            () -> Component.literal("[Windomium] Reset circuit breaker state for " + recovered + " faulted module(s)."),
+                                            false
+                                    );
                                     return 1;
                                 })
                         )
@@ -137,10 +151,11 @@ public final class WindomiumClientCommands {
                                 .executes(context -> {
                                     int loadedMods = ModList.get().size();
                                     String summary = String.format(
-                                            "[Windomium Diagnostics] Preset: %s | Culling: %s | Active Modules: %d | Loaded Mods: %d | Sodium Companion: %s | Shader Guard: %s",
+                                            "[Windomium Diagnostics] Preset: %s | Culling: %s | Active Modules: %d | Faulted: %d | Loaded Mods: %d | Sodium Companion: %s | Shader Guard: %s",
                                             WindomiumConfig.ACTIVE_PRESET.get().name(),
                                             CullingController.getActiveCullingMode().name(),
                                             ModuleManager.getActiveModuleCount(),
+                                            ModuleManager.getFaultedModuleCount(),
                                             loadedMods,
                                             CompatibilityDetector.isSodiumOrForkLoaded() ? "YES" : "NO",
                                             CompatibilityDetector.isIrisOrForkLoaded() ? "YES" : "NO"
@@ -150,6 +165,14 @@ public final class WindomiumClientCommands {
                                 })
                         )
         );
+    }
+
+    private static int applyPreset(CommandSourceStack source, Preset preset) {
+        WindomiumConfig.ACTIVE_PRESET.set(preset);
+        WindomiumConfig.CLIENT_SPEC.save();
+        ModuleManager.applyPreset(preset);
+        source.sendSuccess(() -> Component.literal("[Windomium] Active preset set to: " + preset.name()), false);
+        return 1;
     }
 
     private static int applyCullingMode(CommandSourceStack source, CullingMode mode) {

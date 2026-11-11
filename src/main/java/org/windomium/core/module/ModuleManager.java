@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.windomium.api.IOptimisationModule;
 import org.windomium.api.RiskLevel;
@@ -15,8 +16,14 @@ public final class ModuleManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Map<String, ModuleContainer> MODULES = new ConcurrentHashMap<>();
     private static volatile int activeModuleCount = 0;
+    private static volatile int faultedModuleCount = 0;
+    private static volatile BiConsumer<String, Throwable> faultNotifier;
 
     private ModuleManager() {
+    }
+
+    public static void setFaultNotifier(BiConsumer<String, Throwable> notifier) {
+        faultNotifier = notifier;
     }
 
     public static void register(IOptimisationModule module) {
@@ -26,10 +33,13 @@ public final class ModuleManager {
             module.onInitialise();
             LOGGER.info("Registered Windomium module: {} [{}]", module.getDisplayName(), module.getRiskLevel().getDisplayName());
         } catch (Throwable throwable) {
-            container.markFaulted(throwable);
+            if (throwable instanceof VirtualMachineError vmError) {
+                throw vmError;
+            }
+            container.tripBreaker(throwable);
             LOGGER.error("Failed to initialise module '{}'. Module has been isolated and disabled.", module.getId(), throwable);
         }
-        recalculateActiveCount();
+        recalculateCounts();
     }
 
     public static void applyPreset(Preset preset) {
@@ -46,7 +56,7 @@ public final class ModuleManager {
             };
             setModuleState(module.getId(), shouldEnable);
         }
-        recalculateActiveCount();
+        recalculateCounts();
     }
 
     public static void setModuleState(String moduleId, boolean enable) {
@@ -65,10 +75,14 @@ public final class ModuleManager {
                 container.getModule().onDisable();
                 container.setEnabled(false);
             }
+            container.recordSuccess();
         } catch (Throwable throwable) {
-            handleModuleException(moduleId, throwable);
+            if (throwable instanceof VirtualMachineError vmError) {
+                throw vmError;
+            }
+            tripModuleImmediately(container, throwable);
         }
-        recalculateActiveCount();
+        recalculateCounts();
     }
 
     public static void executeSafely(String moduleId, Runnable task) {
@@ -78,36 +92,84 @@ public final class ModuleManager {
         }
         try {
             task.run();
+            container.recordSuccess();
         } catch (Throwable throwable) {
+            if (throwable instanceof VirtualMachineError vmError) {
+                throw vmError;
+            }
             handleModuleException(moduleId, throwable);
         }
     }
 
     public static void handleModuleException(String moduleId, Throwable throwable) {
+        if (throwable instanceof VirtualMachineError vmError) {
+            throw vmError;
+        }
         ModuleContainer container = MODULES.get(moduleId);
-        if (container != null && !container.isFaulted()) {
-            container.markFaulted(throwable);
-            try {
-                container.getModule().onDisable();
-            } catch (Throwable ignored) {
-            }
-            recalculateActiveCount();
-            LOGGER.error("Module '{}' encountered a runtime exception and was automatically disabled to prevent a crash.", moduleId, throwable);
+        if (container != null && container.recordFailure(throwable)) {
+            performRollbackAndNotify(container, throwable);
         }
     }
 
-    private static void recalculateActiveCount() {
-        int count = 0;
-        for (ModuleContainer container : MODULES.values()) {
-            if (container.isEnabled()) {
-                count++;
+    private static void tripModuleImmediately(ModuleContainer container, Throwable throwable) {
+        if (container.tripBreaker(throwable)) {
+            performRollbackAndNotify(container, throwable);
+        }
+    }
+
+    private static void performRollbackAndNotify(ModuleContainer container, Throwable throwable) {
+        IOptimisationModule module = container.getModule();
+        try {
+            module.onErrorRollback();
+        } catch (Throwable rollbackError) {
+            if (rollbackError instanceof VirtualMachineError vmError) {
+                throw vmError;
             }
         }
-        activeModuleCount = count;
+        recalculateCounts();
+        LOGGER.error("Circuit breaker tripped for module '{}'. Module rolled back and disabled.", module.getId(), throwable);
+        BiConsumer<String, Throwable> notifier = faultNotifier;
+        if (notifier != null) {
+            try {
+                notifier.accept(module.getDisplayName(), throwable);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    public static int resetFaultedModules() {
+        int recovered = 0;
+        for (ModuleContainer container : MODULES.values()) {
+            if (container.isFaulted()) {
+                container.resetFaultState();
+                recovered++;
+            }
+        }
+        syncWithConfig();
+        recalculateCounts();
+        return recovered;
+    }
+
+    private static void recalculateCounts() {
+        int active = 0;
+        int faulted = 0;
+        for (ModuleContainer container : MODULES.values()) {
+            if (container.isFaulted()) {
+                faulted++;
+            } else if (container.isEnabled()) {
+                active++;
+            }
+        }
+        activeModuleCount = active;
+        faultedModuleCount = faulted;
     }
 
     public static int getActiveModuleCount() {
         return activeModuleCount;
+    }
+
+    public static int getFaultedModuleCount() {
+        return faultedModuleCount;
     }
 
     public static boolean isModuleActive(String moduleId) {

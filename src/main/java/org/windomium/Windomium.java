@@ -9,11 +9,9 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import org.slf4j.Logger;
 import org.windomium.api.WindomiumAPI;
 import org.windomium.client.WindomiumClient;
-import org.windomium.client.gui.WindomiumConfigScreen;
 import org.windomium.client.module.ClientModuleBootstrap;
 import org.windomium.core.compat.CompatibilityDetector;
 import org.windomium.core.compat.ModCompatibilityManager;
@@ -37,10 +35,6 @@ public final class Windomium {
         if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientModuleBootstrap.registerAll();
             modEventBus.addListener(WindomiumClient::onRegisterKeyMappings);
-            modContainer.registerExtensionPoint(
-                    IConfigScreenFactory.class,
-                    (container, parent) -> new WindomiumConfigScreen(parent)
-            );
         }
         WindomiumAPI.registerModule(new ServerTickModule());
 

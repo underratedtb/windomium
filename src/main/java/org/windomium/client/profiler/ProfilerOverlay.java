@@ -13,6 +13,7 @@ import org.windomium.core.profiler.SectionTimings;
 public final class ProfilerOverlay {
     private static final int TEXT_COLOUR = 0xE0E0E0;
     private static final int ACCENT_COLOUR = 0x55FF55;
+    private static final int FAULT_COLOUR = 0xFF5555;
     private static long lastTextRefreshNs = 0L;
     private static String cachedLine1 = "Windomium Engine";
     private static String cachedLine2 = "Initialising metrics...";
@@ -34,17 +35,20 @@ public final class ProfilerOverlay {
             return;
         }
 
+        int faultedCount = ModuleManager.getFaultedModuleCount();
         long now = System.nanoTime();
         if (now - lastTextRefreshNs >= 250_000_000L) {
             lastTextRefreshNs = now;
             FrameMetricsSnapshot snapshot = ClientProfilerManager.getLatestSnapshot();
             SectionTimings timings = ClientProfilerManager.getSectionTimings();
 
+            String faultSuffix = faultedCount > 0 ? (" | FAULTED: " + faultedCount) : "";
             cachedLine1 = String.format(
-                    "Windomium [%s | Culling: %s] | Modules: %d | Scale: %.0f%%",
+                    "Windomium [%s | Culling: %s] | Modules: %d%s | Scale: %.0f%%",
                     WindomiumConfig.ACTIVE_PRESET.get().name(),
                     CullingController.getActiveCullingMode().name(),
                     ModuleManager.getActiveModuleCount(),
+                    faultSuffix,
                     CullingController.getDynamicQualityScale() * 100.0
             );
             cachedLine2 = String.format(
@@ -84,7 +88,8 @@ public final class ProfilerOverlay {
         Font font = mc.font;
         int x = 6;
         int y = 6;
-        graphics.drawString(font, cachedLine1, x, y, ACCENT_COLOUR, true);
+        int headerColour = faultedCount > 0 ? FAULT_COLOUR : ACCENT_COLOUR;
+        graphics.drawString(font, cachedLine1, x, y, headerColour, true);
         graphics.drawString(font, cachedLine2, x, y + 11, TEXT_COLOUR, true);
         graphics.drawString(font, cachedLine3, x, y + 22, TEXT_COLOUR, true);
         graphics.drawString(font, cachedLine4, x, y + 33, TEXT_COLOUR, true);
